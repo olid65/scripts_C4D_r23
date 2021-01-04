@@ -16,12 +16,11 @@ CONTAINER_ORIGIN = 1026473
 
 NOM_CHAMP_HAUT = 'HAUTEUR'
 #NOM_CHAMP_DIAMETRE = 'DIAMETRE'
-NOM_CHAMP_RAYON = 'RAYON_COUR' #attention il semble que arcgis coupe le nom dans certains cas !!!
-
+NOM_CHAMP_RAYON = 'RAYON_COURONNE'
 NOM_CHAMP_Z = 'Z'
 
 HAUTEUR_DEFAUT = 15.
-RAYON_DEFAUT = 7.5
+DIAMETRE_DEFAUT = 7.5
 
 PROPORTIONS_DEFAUT = 0.35  # proportion entre le diametre et la hauteur pour si il manque un des champs
 
@@ -165,20 +164,20 @@ def index(liste, nom):
     return liste.index(nom)
 
 
-def niHaut_niDiam(haut=None, rayon=None):
+def niHaut_niDiam(haut=None, diam=None):
     return HAUTEUR_DEFAUT, DIAMETRE_DEFAUT
 
 
-def pasHaut(haut=None, rayon=None):
-    return rayon*2 / PROPORTIONS_DEFAUT, diam
+def pasHaut(haut=None, diam=None):
+    return diam / PROPORTIONS_DEFAUT, diam
 
 
-def pasDiam(haut=None, rayon=None):
+def pasDiam(haut=None, diam=None):
     return haut, haut * PROPORTIONS_DEFAUT
 
 
-def hautDiam(haut=None, rayon=None):
-    return haut, rayon*2
+def hautDiam(haut=None, diam=None):
+    return haut, diam
 
 
 def centreBbox(bbox):
@@ -229,22 +228,24 @@ def main(fn=None,
     fields_name = [f[0].lower() for f in reader.fields][1:]
 
     nom_champ_haut = NOM_CHAMP_HAUT.lower()
+    #nom_champ_diametre = NOM_CHAMP_DIAMETRE.lower()
     nom_champ_rayon = NOM_CHAMP_RAYON.lower()
     nom_champ_z = NOM_CHAMP_Z.lower()
 
     id_haut = index(fields_name, nom_champ_haut)
-    id_diam = index(fields_name, nom_champ_rayon)
+    #id_diam = index(fields_name, nom_champ_diametre)
+    id_rayon = index(fields_name, nom_champ_rayon)
     id_z = index(fields_name, nom_champ_z)
 
     haut = diam = None
     z = None
 
     # selon le cas de figure on applique une fonction differente
-    if id_haut == -1 and id_diam == -1:
+    if id_haut == -1 and id_rayon == -1:
         fonction = niHaut_niDiam
     elif id_haut == -1:
         fonction = pasHaut
-    elif id_diam == -1:
+    elif id_rayon == -1:
         fonction = pasDiam
     else:
         fonction = hautDiam
@@ -258,8 +259,8 @@ def main(fn=None,
     for shp, rec in zip(reader.iterShapes(), reader.iterRecords()):
         if id_haut >= 0:
             haut = rec[id_haut]
-        if id_diam >= 0:
-            diam = rec[id_diam]
+        if id_rayon >= 0:
+            diam = rec[id_rayon]*2
         haut, diam = fonction(haut, diam)
         hauteurs.append(haut)
         diametres.append(diam)
@@ -268,14 +269,17 @@ def main(fn=None,
         z = 0
         if id_z >= 0:
             z = rec[id_z]
+            
+        if not(shp.points): continue
 
-        if len(shp.points) > 1:
+        elif len(shp.points) > 1:
             # TODO traiter les multipoints !
             print ('MULTIPOINT !')
         else:
             x, y = shp.points[0]
             if not z:
-                z = shp.z[0]
+                try : z = shp.z[0]
+                except : pass
             pos = c4d.Vector(x, z, y) - centre
             points.append(pos)
 

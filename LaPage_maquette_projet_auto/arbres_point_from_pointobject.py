@@ -80,13 +80,41 @@ def main():
         c4d.gui.MessageDialog(TXT_NOT_POLYGON)
         return
 
-    rep = c4d.gui.QuestionDialog(f"""Les points de "{obj_pts.GetName()}" seront projetés sur "{mnt.GetName()}"\nVoulez-vous continuer ?""")
+    rep = c4d.gui.QuestionDialog(f"""Les points de "{obj_pts.GetName()}" seront copiés et projetés sur "{mnt.GetName()}"\nVoulez-vous continuer ?""")
 
     if not rep : return
-    doc.StartUndo()
-    doc.AddUndo(c4d.UNDOTYPE_CHANGE,obj_pts)
-    pointsOnSurface(obj_pts,mnt)
-    doc.EndUndo()
+
+    obj_points_clone = obj_pts.GetClone()
+    pointsOnSurface(obj_points_clone,mnt)
+
+    #suppression des polygones de l'objet
+    mg = obj_points_clone.GetMg()
+    pts = [p*mg for p in obj_points_clone.GetAllPoints()]
+    new_obj_pts = c4d.PolygonObject(len(pts),0)
+    new_obj_pts.SetAllPoints(pts)
+    new_obj_pts.Message(c4d.MSG_UPDATE)
+
+    new_obj_pts.SetName(SUFFIXE_OBJ_POINT+obj_pts.GetName())
+
+    multi_inst = c4d.BaseObject(c4d.Oinstance)
+    multi_inst[c4d.INSTANCEOBJECT_RENDERINSTANCE_MODE] = c4d.INSTANCEOBJECT_RENDERINSTANCE_MODE_MULTIINSTANCE
+    multi_inst[c4d.INSTANCEOBJECT_MULTIPOSITIONINPUT] = new_obj_pts
+
+    multi_inst.InsertUnder(new_obj_pts)
+
+
+    #arbre source
+    #TODO : spliter pas variante (ici je prends uniquement la première)
+    fn='/Users/donzeo/Library/Preferences/MAXON/Maxon Cinema 4D R23_2FE1299C/plugins/SITG_C4D/__arbres_2018__.c4d'
+    sources = getArbresSourcesFromFile(fn)
+    if sources:
+        source = sources[0]
+        source.InsertUnder(new_obj_pts)
+        source.SetName("objet de référence")
+        multi_inst[c4d.INSTANCEOBJECT_LINK] = source
+
+
+    doc.InsertObject(new_obj_pts)
     c4d.EventAdd()
 
 
