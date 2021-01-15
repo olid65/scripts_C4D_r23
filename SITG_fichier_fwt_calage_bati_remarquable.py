@@ -1,12 +1,7 @@
 import c4d,os
 from glob import glob
 
-
-# Script state in the menu or the command palette
-# Return True or c4d.CMD_ENABLED to enable, False or 0 to disable
-# Alternatively return c4d.CMD_ENABLED|c4d.CMD_VALUE to enable and check/mark
-#def state():
-#    return True
+OA_OFFSET_FILE_NAME = 'Offset_OA.txt'
 
 def readFWT(fn):
     """lecture du fichier fwt des b^âtiments remarquables
@@ -36,34 +31,46 @@ def getFilesFromDir(pth,ext =''):
 
 def getFilesFromDir_recursive(pth,ext =''):
     res = []
-    if os.path.isdir(pth): res.extend(getFilesFromDir(pth,ext)) 
-       
+    if os.path.isdir(pth): res.extend(getFilesFromDir(pth,ext))
+
     for pth2 in glob(os.path.join(pth,'*')):
         if os.path.isdir(pth2):
             res.extend(getFilesFromDir_recursive(pth2,ext))
-    return res   
+    return res
+
+def read_OA_Offset(fn):
+    with open(fn) as f :
+        transx = float(f.readline().split()[-1])
+        transz = float(f.readline().split()[-1])
+        return c4d.Vector(transx,0,transz)
 
 
 
 # Main function
 def main():
-    
-    path = '/Users/olivier.donze/Downloads/format_z_3D_3DS_OUVRAGES_bat_20210113_091959'
-    
+
+    path = '/Users/donzeo/Documents/Mandats/SITG/format_z_3D_3DS_OUVRAGES_canton_all_20210113_134339'
+    path = '/Users/donzeo/Documents/Mandats/SITG/format_z_3D_3DS_OUVRAGES_canton_all_20210113_134339/12_quai_du_Rhone'
+    path = '/Users/donzeo/Documents/Mandats/SITG'
     #recuperation de tous les fichier 3ds
     for fn_3ds in getFilesFromDir_recursive(path,ext ='.3ds'):
-        print(fn_3ds)
+        dir_up,name = os.path.split(fn_3ds)
+        print(name)
+        
+        fn_offset = os.path.join(dir_up,OA_OFFSET_FILE_NAME)
+        
         #fichier calage pour les bati remarquables
         fn_fwt = fn_3ds.replace('.3ds','.fwt')
         if os.path.isfile(fn_fwt):
             print(readFWT(fn_fwt))
-            
+
         #sinon on regarde si on a un fichier Offset_OA.txt pour les ouvrages d'art'
-        
-        elif :
-            
-            
-        
+        elif os.path.isfile(fn_offset) :
+            print(fn_offset)
+            print(read_OA_Offset(fn_offset))
+
+
+
         print('---')
 
     return
