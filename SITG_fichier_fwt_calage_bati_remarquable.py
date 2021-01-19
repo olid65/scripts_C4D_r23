@@ -13,30 +13,33 @@ NOT_SAVED_TXT = "Le document doit être enregistré pour pouvoir copier les text
 
 DIRNAME_OA = 'bat_remarquables_et_ouvrages_art'
 
+OUVRAGES_ART_NAME = "ouvrages_art"
+
+BATI_REMARQUABLES_NAME = "batiments_remarquables"
+
+DOC_NOT_IN_METERS_TXT = "Les unités du document ne sont pas en mètres, si vous continuez les unités seront modifiées.\nVoulez-vous continuer ?"
 
 
 
-def getLayerByName(name,layer=c4d.documents.GetActiveDocument().GetLayerObjectRoot().GetDown()):
-    """si le layer existe le renvoie sinon renvoie None"""
-    res = None
+def getLayerByName(name,doc):
+    """si le layer existe le renvoie sinon renvoie None
+    Attention seulement au premier niveau, j'ai pas réussi à régler la récursion"""
+    layer=doc.GetLayerObjectRoot().GetDown()
     while layer:
         if name == layer.GetName(): return layer
-        res = getLayerByName(name,layer.GetDown())
-        if res : return res
         layer = layer.GetNext()
-    return res
+    return None
 
-def layerByName(name,parent = None):
+def layerByName(name,doc,parent = None):
     """renvoie le layer s'il existe
        sinon il le cree et le renvoie"""
-    layer = getLayerByName(name)
+    layer = getLayerByName(name,doc)
     if not layer :
         layer =c4d.documents.LayerObject()
         layer.SetName(name)
         if not parent:
             parent = doc.GetLayerObjectRoot()
         layer.InsertUnder(parent)
-        doc.AddUndo(c4d.UNDOTYPE_NEW,layer)
     return layer
 
 
@@ -81,67 +84,64 @@ def read_OA_Offset(fn):
         transz = float(f.readline().split()[-1])
         return c4d.Vector(transx,0,transz)
 
-def merge3ds(fn_3ds,doc):
+def merge3ds(fn_3ds,doc, lyrname):
 
     first_obj = doc.GetFirstObject()
     first_mat = doc.GetFirstMaterial()
-    
+
     dir_up,name = os.path.split(fn_3ds)
     name = os.path.basename(dir_up)
-    
-    lyr = layerByName(DIRNAME_OA)
-    
+
+    lyr = layerByName(lyrname,doc)
+
     #lyr = layerByName(name, lyr_parent)
-    
+
     path_tex = os.path.join(doc.GetDocumentPath(),'tex',DIRNAME_OA)
     if not os.path.isdir(path_tex):
         os.makedirs(path_tex)
-        
-    
+
+
     if MATERIAUX :
         dic_png = {}
-    
+
         #copie des png
         for fn_png in glob(os.path.join(dir_up,'*.png')):
             dir_png,old_name_png = os.path.split(fn_png)
             new_name_png = name+'_'+old_name_png
             dic_png[old_name_png] = new_name_png
             new_fn_png = os.path.join(path_tex,new_name_png)
-            
+
             #TODO gérer si le fichier existe !
             if os.path.isfile(new_fn_png) :
                 print(f"le fichier '{new_name_png}' existe déjà")
             else:
                 shutil.copy(fn_png, new_fn_png)
-    
-    
+
+
     #merge des documents
     res = c4d.BaseObject(c4d.Onull)
-    res[c4d.ID_LAYER_LINK] = lyr
     res.SetName(name)
-    
+
     if MATERIAUX:
         c4d.documents.MergeDocument(doc, fn_3ds, c4d.SCENEFILTER_OBJECTS|c4d.SCENEFILTER_MATERIALS,None)
     else:
         c4d.documents.MergeDocument(doc, fn_3ds, c4d.SCENEFILTER_OBJECTS,None)
 
 
-    doc.InsertObject(res)
     objs = []
     obj = doc.GetFirstObject()
-    
+
     while obj != first_obj:
         if obj!= res:
             objs.append(obj)
         obj = obj.GetNext()
-    for o in objs : 
-        o[c4d.ID_LAYER_LINK] = lyr
+    for o in objs :
         o.InsertUnder(res)
-    
+
     if MATERIAUX :
         #TODO : renommer les materiaux avec nom de l'ouvrage en prefixe'
         mat = doc.GetFirstMaterial()
-        
+
         while mat != first_mat:
             mat[c4d.ID_LAYER_LINK] = lyr
             mat.SetName(name+'_'+mat.GetName())
@@ -153,10 +153,10 @@ def merge3ds(fn_3ds,doc):
                     shader[c4d.BITMAPSHADER_FILENAME] = new
                     mat.Message(c4d.MSG_UPDATE)
                     mat.Update(True, True)
-                
+
             mat = mat.GetNext()
     return res
-    
+
 def getBMPshader(mat):
     shader = mat.GetFirstShader()
     while shader:
@@ -170,7 +170,21 @@ def getBMPshader(mat):
 
 # Main function
 def main():
+
+    #TODO : il faut que le doc soit en mètres
     doc = c4d.documents.GetActiveDocument()
+
+    usdata = doc[c4d.DOCUMENT_DOCUNIT]
+    scale, unit = usdata.GetUnitScale()
+    if  unit!= c4d.DOCUMENT_UNIT_M:
+        rep = c4d.gui.QuestionDialog(DOC_NOT_IN_METERS_TXT)
+        if not rep : return
+        unit = c4d.DOCUMENT_UNIT_M
+        usdata.SetUnitScale(scale, unit)
+        doc[c4d.DOCUMENT_DOCUNIT] = usdata
+
+
+
     #si le document n'est pas enregistré on enregistre
     path_doc = doc.GetDocumentPath()
     while not path_doc:
@@ -190,34 +204,62 @@ def main():
 
     origin = doc[CONTAINER_ORIGIN]
 
+    res_OA = None
+    res_BatiRem = None
+
     #recuperation de tous les fichier 3ds
     for fn_3ds in getFilesFromDir_recursive(path,ext ='.3ds'):
-        obj_null = merge3ds(fn_3ds,doc)
+
+        
+
         dir_up,name = os.path.split(fn_3ds)
         name = os.path.basename(dir_up)
 
         fn_offset = os.path.join(dir_up,OA_OFFSET_FILE_NAME)
-
+        
         #fichier calage pour les bati remarquables
         fn_fwt = fn_3ds.replace('.3ds','.fwt')
         
+        #BATIMENTS REMARQUABLES
         if os.path.isfile(fn_fwt):
+            if not res_BatiRem :
+                res_BatiRem = c4d.BaseObject(c4d.Onull)
+                res_BatiRem.SetName(BATI_REMARQUABLES_NAME)
+            #merge du fichier 3ds avec le fichier courant
+            obj_null = merge3ds(fn_3ds,doc,BATI_REMARQUABLES_NAME)
+            obj_null.InsertUnderLast(res_BatiRem)
             trans,scale = readFWT(fn_fwt)
-
+    
+        #OUVRAGE ART
         #sinon on regarde si on a un fichier Offset_OA.txt pour les ouvrages d'art'
         elif os.path.isfile(fn_offset) :
+
+            if not res_OA :
+                res_OA = c4d.BaseObject(c4d.Onull)
+                res_OA.SetName(OUVRAGES_ART_NAME)
+            
+            #merge du fichier 3ds avec le fichier courant
+            obj_null = merge3ds(fn_3ds,doc,OUVRAGES_ART_NAME)
+            obj_null.InsertUnderLast(res_OA)
+
+
             trans = read_OA_Offset(fn_offset)
             scale = c4d.Vector(1)
-        
+
         if not origin :
             doc[CONTAINER_ORIGIN] = trans
             origin = doc[CONTAINER_ORIGIN]
-            
+
         obj_null.SetAbsPos(trans-origin)
-        
+
         #TODO : modifier la géométrie plutôt que l'échelle'
         obj_null.SetAbsScale(scale)
-            
+
+    if res_BatiRem:
+        doc.InsertObject(res_BatiRem)
+    if res_OA:
+        doc.InsertObject(res_OA)
+
     c4d.EventAdd()
 
 
