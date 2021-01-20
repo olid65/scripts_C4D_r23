@@ -157,7 +157,7 @@ def merge3ds(fn_3ds,doc, lyrname):
                     mat.Update(True, True)
 
             mat = mat.GetNext()
-            
+
             #TODO :si transparence -> ajouter dans le canal alpha
             #bmp = c4d.bitmaps.BaseBitmap()
             #bmp.InitWith(fn)
@@ -202,6 +202,27 @@ def main():
         c4d.documents.SaveDocument(doc, "", c4d.SAVEDOCUMENTFLAGS_DIALOGSALLOWED, c4d.FORMAT_C4DEXPORT)
         c4d.CallCommand(12098) # Enregistrer le projet
         path_doc = doc.GetDocumentPath()
+        
+        
+    #mise en cm des option d'importation 3DS
+    #sinon c4d garde les dernières options d'import de 3ds
+    plug = c4d.plugins.FindPlugin(1001037, c4d.PLUGINTYPE_SCENELOADER)
+    if plug is None:
+        print ("pas de module d'import 3DS")
+        return 
+    dico = {}
+   
+    if plug.Message(c4d.MSG_RETRIEVEPRIVATEDATA, dico):
+        
+        import_data = dico.get("imexporter",None)
+        if not import_data:
+            print ("pas de data pour l'import 3Ds")
+            return
+        
+        # Change 3DS import settings
+        scale = import_data[c4d.F3DSIMPORTFILTER_SCALE]
+        scale.SetUnitScale(1,c4d.DOCUMENT_UNIT_M)
+        import_data[c4d.F3DSIMPORTFILTER_SCALE] = scale
 
     path = None
     path = '/Users/donzeo/Documents/Mandats/SITG/format_z_3D_3DS_OUVRAGES_canton_all_20210113_134339'
