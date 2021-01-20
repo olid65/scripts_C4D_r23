@@ -19,7 +19,9 @@ BATI_REMARQUABLES_NAME = "batiments_remarquables"
 
 DOC_NOT_IN_METERS_TXT = "Les unités du document ne sont pas en mètres, si vous continuez les unités seront modifiées.\nVoulez-vous continuer ?"
 
+OUVRAGES_ART_LYR_COLOR = c4d.Vector(1,0,0)
 
+BATI_REMARQUABLES_COLOR = c4d.Vector(1,1,0)
 
 def getLayerByName(name,doc):
     """si le layer existe le renvoie sinon renvoie None
@@ -30,16 +32,20 @@ def getLayerByName(name,doc):
         layer = layer.GetNext()
     return None
 
-def layerByName(name,doc,parent = None):
+def layerByName(name,doc, color = None):
     """renvoie le layer s'il existe
        sinon il le cree et le renvoie"""
     layer = getLayerByName(name,doc)
+
     if not layer :
         layer =c4d.documents.LayerObject()
         layer.SetName(name)
-        if not parent:
-            parent = doc.GetLayerObjectRoot()
+        parent = doc.GetLayerObjectRoot()
         layer.InsertUnder(parent)
+    if color :
+        data = layer.GetLayerData(doc)
+        data['color'] = color
+        layer.SetLayerData(doc,data)
     return layer
 
 
@@ -92,16 +98,13 @@ def merge3ds(fn_3ds,doc, lyrname):
     dir_up,name = os.path.split(fn_3ds)
     name = os.path.basename(dir_up)
 
-    lyr = layerByName(lyrname,doc)
-
-    #lyr = layerByName(name, lyr_parent)
-
-    path_tex = os.path.join(doc.GetDocumentPath(),'tex',DIRNAME_OA)
-    if not os.path.isdir(path_tex):
-        os.makedirs(path_tex)
-
 
     if MATERIAUX :
+        lyr = layerByName(lyrname,doc)
+        path_tex = os.path.join(doc.GetDocumentPath(),'tex',DIRNAME_OA)
+
+        if not os.path.isdir(path_tex):
+            os.makedirs(path_tex)
         dic_png = {}
 
         #copie des png
@@ -139,7 +142,6 @@ def merge3ds(fn_3ds,doc, lyrname):
         o.InsertUnder(res)
 
     if MATERIAUX :
-        #TODO : renommer les materiaux avec nom de l'ouvrage en prefixe'
         mat = doc.GetFirstMaterial()
 
         while mat != first_mat:
@@ -155,6 +157,13 @@ def merge3ds(fn_3ds,doc, lyrname):
                     mat.Update(True, True)
 
             mat = mat.GetNext()
+            
+            #TODO :si transparence -> ajouter dans le canal alpha
+            #bmp = c4d.bitmaps.BaseBitmap()
+            #bmp.InitWith(fn)
+            #transp = bmp.GetInternalChannel()
+            #if transp:
+                #ajouter dans canal alpha l'image
     return res
 
 def getBMPshader(mat):
@@ -210,26 +219,29 @@ def main():
     #recuperation de tous les fichier 3ds
     for fn_3ds in getFilesFromDir_recursive(path,ext ='.3ds'):
 
-        
+
 
         dir_up,name = os.path.split(fn_3ds)
         name = os.path.basename(dir_up)
 
         fn_offset = os.path.join(dir_up,OA_OFFSET_FILE_NAME)
-        
+
         #fichier calage pour les bati remarquables
         fn_fwt = fn_3ds.replace('.3ds','.fwt')
-        
+
         #BATIMENTS REMARQUABLES
         if os.path.isfile(fn_fwt):
             if not res_BatiRem :
                 res_BatiRem = c4d.BaseObject(c4d.Onull)
                 res_BatiRem.SetName(BATI_REMARQUABLES_NAME)
+                #layer
+                res_BatiRem[c4d.ID_LAYER_LINK] = layerByName(BATI_REMARQUABLES_NAME,doc, color = BATI_REMARQUABLES_COLOR)
+
             #merge du fichier 3ds avec le fichier courant
             obj_null = merge3ds(fn_3ds,doc,BATI_REMARQUABLES_NAME)
             obj_null.InsertUnderLast(res_BatiRem)
             trans,scale = readFWT(fn_fwt)
-    
+
         #OUVRAGE ART
         #sinon on regarde si on a un fichier Offset_OA.txt pour les ouvrages d'art'
         elif os.path.isfile(fn_offset) :
@@ -237,7 +249,9 @@ def main():
             if not res_OA :
                 res_OA = c4d.BaseObject(c4d.Onull)
                 res_OA.SetName(OUVRAGES_ART_NAME)
-            
+                #layer
+                res_OA[c4d.ID_LAYER_LINK] = layerByName(OUVRAGES_ART_NAME,doc, color = OUVRAGES_ART_LYR_COLOR)
+
             #merge du fichier 3ds avec le fichier courant
             obj_null = merge3ds(fn_3ds,doc,OUVRAGES_ART_NAME)
             obj_null.InsertUnderLast(res_OA)
@@ -261,24 +275,6 @@ def main():
         doc.InsertObject(res_OA)
 
     c4d.EventAdd()
-
-
-
-    return
-    fn = '/Users/olivier.donze/Downloads/format_z_3D_3DS_OUVRAGES_bat_20210113_091959/Gare_Cornavin/Gare_Cornavin.fwt'
-    with open(fn) as f:
-        fwt = f.read().split()
-        scalex = float(fwt[0])/100
-        transx = float(fwt[3])
-        scalez = float(fwt[5])/100
-        transz = float(fwt[7])
-        scaley = float(fwt[10])/100
-        transy = float(fwt[11])
-
-        scale = c4d.Vector(scalex,scaley,scalez)
-        translation = c4d.Vector(transx,transy,transz)
-        print(scale)
-        print(translation)
 
 # Execute main()
 if __name__=='__main__':
