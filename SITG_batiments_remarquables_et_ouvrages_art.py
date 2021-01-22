@@ -3,7 +3,7 @@ from glob import glob
 
 #à modifier si on veut ou pas les materiaux
 # peut ^être lourd et long car copie toutes les texture dans tex
-MATERIAUX = False
+MATERIAUX = True
 
 CONTAINER_ORIGIN =1026473
 
@@ -156,14 +156,23 @@ def merge3ds(fn_3ds,doc, lyrname):
                     mat.Message(c4d.MSG_UPDATE)
                     mat.Update(True, True)
 
-            mat = mat.GetNext()
+            
 
-            #TODO :si transparence -> ajouter dans le canal alpha
-            #bmp = c4d.bitmaps.BaseBitmap()
-            #bmp.InitWith(fn)
-            #transp = bmp.GetInternalChannel()
-            #if transp:
-                #ajouter dans canal alpha l'image
+                #TODO :si transparence -> ajouter dans le canal alpha
+                path_tex = os.path.join(doc.GetDocumentPath(),'tex',DIRNAME_OA)
+                fn_img = os.path.join(path_tex,shader[c4d.BITMAPSHADER_FILENAME])
+                bmp = c4d.bitmaps.BaseBitmap()
+                bmp.InitWith(fn_img)
+                transp = bmp.GetInternalChannel()
+                if transp:
+                    mat[c4d.MATERIAL_USE_ALPHA] = True
+                    new_shd = shader.GetClone()
+    
+                    mat[c4d.MATERIAL_ALPHA_SHADER] = new_shd
+                    mat.InsertShader(new_shd)
+                    mat.Message(c4d.MSG_UPDATE)
+                    mat.Update(True, True)
+            mat = mat.GetNext()
     return res
 
 def getBMPshader(mat):
@@ -175,6 +184,59 @@ def getBMPshader(mat):
     return None
 
 
+def getFirstChildPolygonObject(op):
+    child = op.GetDown()
+    while child:
+        if child.CheckType(c4d.Opolygon):
+            return child
+        child = op.GetNext()
+    return None
+
+def translationPoints(obj, transl):
+    pts = [p-transl for p in obj.GetAllPoints()]
+
+    obj.SetAllPoints(pts)
+    obj.Message(c4d.MSG_UPDATE)
+
+def translationGroupeOuvragesArt(op):
+    """centrage des axes des OA contenus dans op"""
+    for o in op.GetChildren():
+        #on récupère le premier enfant polygonal
+        #de chaque objet neutre et on prend le centre (GetMp)
+        child = getFirstChildPolygonObject(o)
+        if not child : break
+
+        transl = child.GetMp()
+
+        #on déplace les points de chaque sous objet polygonal
+        for obj in o.GetChildren():
+            if obj.CheckType(c4d.Opolygon):
+                translationPoints(obj, transl)
+
+        #et on bouge l'objet parent
+        mg = o.GetMg()
+        mg.off+= transl
+        o.SetMg(mg)
+
+def scalePoints(obj, mscale):
+    pts = [p*mscale for p in obj.GetAllPoints()]
+    obj.SetAllPoints(pts)
+    obj.Message(c4d.MSG_UPDATE)
+
+def scaleGroupeBatRemarquables(op):
+    """centrage des axes des OA contenus dans op"""
+    for o in op.GetChildren():
+        #on récupère l'échelle
+        scale = o.GetAbsScale()
+        mscale = c4d.utils.MatrixScale(scale)
+
+        #on met à l'échelle les points'
+        for obj in o.GetChildren():
+            if obj.CheckType(c4d.Opolygon):
+                scalePoints(obj, mscale)
+
+        #et on remet une échelle de 1 à l'objet parent'
+        o.SetAbsScale(c4d.Vector(1))
 
 
 # Main function
@@ -202,23 +264,23 @@ def main():
         c4d.documents.SaveDocument(doc, "", c4d.SAVEDOCUMENTFLAGS_DIALOGSALLOWED, c4d.FORMAT_C4DEXPORT)
         c4d.CallCommand(12098) # Enregistrer le projet
         path_doc = doc.GetDocumentPath()
-        
-        
+
+
     #mise en cm des option d'importation 3DS
     #sinon c4d garde les dernières options d'import de 3ds
     plug = c4d.plugins.FindPlugin(1001037, c4d.PLUGINTYPE_SCENELOADER)
     if plug is None:
         print ("pas de module d'import 3DS")
-        return 
+        return
     dico = {}
-   
+
     if plug.Message(c4d.MSG_RETRIEVEPRIVATEDATA, dico):
-        
+
         import_data = dico.get("imexporter",None)
         if not import_data:
             print ("pas de data pour l'import 3Ds")
             return
-        
+
         # Change 3DS import settings
         scale = import_data[c4d.F3DSIMPORTFILTER_SCALE]
         scale.SetUnitScale(1,c4d.DOCUMENT_UNIT_M)
@@ -239,8 +301,6 @@ def main():
 
     #recuperation de tous les fichier 3ds
     for fn_3ds in getFilesFromDir_recursive(path,ext ='.3ds'):
-
-
 
         dir_up,name = os.path.split(fn_3ds)
         name = os.path.basename(dir_up)
@@ -287,13 +347,19 @@ def main():
 
         obj_null.SetAbsPos(trans-origin)
 
-        #TODO : modifier la géométrie plutôt que l'échelle'
+        #TODO : modifier la géométrie plutôt que l'échelle' -> voir plus bas
         obj_null.SetAbsScale(scale)
 
     if res_BatiRem:
         doc.InsertObject(res_BatiRem)
+        #mise à l'écehlle des points
+        #pour avoir des échelles d'objet à 1
+        #TODO : faire ça directement lors de l'import ? (plus haut)
+        scaleGroupeBatRemarquables(res_BatiRem)
     if res_OA:
         doc.InsertObject(res_OA)
+        #centrer les axes sur les objets
+        translationGroupeOuvragesArt(res_OA)
 
     c4d.EventAdd()
 
