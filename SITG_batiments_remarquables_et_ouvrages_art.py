@@ -90,6 +90,15 @@ def read_OA_Offset(fn):
         transz = float(f.readline().split()[-1])
         return c4d.Vector(transx,0,transz)
 
+def non_existant_fn(fn):
+    """renvoie un nom de fichier incrementé qui n'existe pas"""
+    i=1
+    name,ext = os.path.splitext(fn)
+    while os.path.exists(fn):
+        fn = f'{name}_{i}{ext}'
+        i+=1
+    return fn
+
 def merge3ds(fn_3ds,doc, lyrname):
 
     first_obj = doc.GetFirstObject()
@@ -111,14 +120,15 @@ def merge3ds(fn_3ds,doc, lyrname):
         for fn_png in glob(os.path.join(dir_up,'*.png')):
             dir_png,old_name_png = os.path.split(fn_png)
             new_name_png = name+'_'+old_name_png
-            dic_png[old_name_png] = new_name_png
+            
             new_fn_png = os.path.join(path_tex,new_name_png)
-
-            #TODO gérer si le fichier existe !
-            if os.path.isfile(new_fn_png) :
-                print(f"le fichier '{new_name_png}' existe déjà")
-            else:
-                shutil.copy(fn_png, new_fn_png)
+            
+            #on s'assure que le fichier n'existe pas, sinon il est incrémenté
+            new_fn_png = non_existant_fn(new_fn_png)
+            
+            dic_png[old_name_png] = os.path.basename(new_fn_png)
+            
+            shutil.copy(fn_png, new_fn_png)
 
 
     #merge des documents
@@ -156,7 +166,7 @@ def merge3ds(fn_3ds,doc, lyrname):
                     mat.Message(c4d.MSG_UPDATE)
                     mat.Update(True, True)
 
-            
+
 
                 #TODO :si transparence -> ajouter dans le canal alpha
                 path_tex = os.path.join(doc.GetDocumentPath(),'tex',DIRNAME_OA)
@@ -167,7 +177,7 @@ def merge3ds(fn_3ds,doc, lyrname):
                 if transp:
                     mat[c4d.MATERIAL_USE_ALPHA] = True
                     new_shd = shader.GetClone()
-    
+
                     mat[c4d.MATERIAL_ALPHA_SHADER] = new_shd
                     mat.InsertShader(new_shd)
                     mat.Message(c4d.MSG_UPDATE)
@@ -287,7 +297,7 @@ def main():
         import_data[c4d.F3DSIMPORTFILTER_SCALE] = scale
 
     path = None
-    path = '/Users/donzeo/Documents/Mandats/SITG/format_z_3D_3DS_OUVRAGES_canton_all_20210113_134339'
+    #path = '/Users/donzeo/Documents/Mandats/SITG/format_z_3D_3DS_OUVRAGES_canton_all_20210113_134339'
     #path = '/Users/donzeo/Documents/Mandats/SITG/format_z_3D_3DS_OUVRAGES_canton_all_20210113_134339/12_quai_du_Rhone'
     #path = '/Users/donzeo/Documents/Mandats/SITG'
     if not path :
