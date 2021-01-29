@@ -120,14 +120,14 @@ def merge3ds(fn_3ds,doc, lyrname):
         for fn_png in glob(os.path.join(dir_up,'*.png')):
             dir_png,old_name_png = os.path.split(fn_png)
             new_name_png = name+'_'+old_name_png
-            
+
             new_fn_png = os.path.join(path_tex,new_name_png)
-            
+
             #on s'assure que le fichier n'existe pas, sinon il est incrémenté
             new_fn_png = non_existant_fn(new_fn_png)
-            
+
             dic_png[old_name_png] = os.path.basename(new_fn_png)
-            
+
             shutil.copy(fn_png, new_fn_png)
 
 
@@ -248,6 +248,11 @@ def scaleGroupeBatRemarquables(op):
         #et on remet une échelle de 1 à l'objet parent'
         o.SetAbsScale(c4d.Vector(1))
 
+def setLayerHierarchic(obj,lyr):
+    while obj:
+        obj[c4d.ID_LAYER_LINK] = lyr
+        setLayerHierarchic(obj.GetDown(),lyr)
+        obj=obj.GetNext()
 
 # Main function
 def main():
@@ -366,10 +371,19 @@ def main():
         #pour avoir des échelles d'objet à 1
         #TODO : faire ça directement lors de l'import ? (plus haut)
         scaleGroupeBatRemarquables(res_BatiRem)
+
+        #on attribue le calque à toute la hierarchie
+        lyr = res_BatiRem[c4d.ID_LAYER_LINK]
+        setLayerHierarchic(res_BatiRem.GetDown(),lyr)
+
     if res_OA:
         doc.InsertObject(res_OA)
         #centrer les axes sur les objets
         translationGroupeOuvragesArt(res_OA)
+
+        #on attribue le calque à toute la hierarchie
+        lyr = res_OA[c4d.ID_LAYER_LINK]
+        setLayerHierarchic(res_OA.GetDown(),lyr)
 
     c4d.EventAdd()
 

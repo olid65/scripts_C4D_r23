@@ -1,0 +1,3 @@
+https://ge.ch/sitgags2/rest/services/RASTER
+https://ge.ch/sitgags2/rest/services/CARTES_HISTORIQUES
+http://services.arcgisonline.com/arcgis/rest/services
